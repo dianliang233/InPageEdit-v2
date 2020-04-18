@@ -11,7 +11,11 @@
   if (typeof (InPageEdit) !== 'undefined' && typeof (InPageEdit.version) !== 'undefined') throw '[InPageEdit] 已经有一个IPE插件在执行了';
   window.InPageEdit = window.InPageEdit || {};
   InPageEdit.isCanary = false;
-  /*=version*/InPageEdit.version = '2.13.0.1(build_c052a80)';/*version=*/
+  InPageEdit.api = {
+    aboutUrl: 'https://dragon-fish.github.io/InPageEdit-v2/',
+    updatelogsJson: 'https://cdn.jsdelivr.net/gh/dragon-fish/inpageedit-v2@master/docs/update-logs.json'
+  }
+  /*=version*/InPageEdit.version = '2.13.0.2';/*version=*/
 
   /** 导入模态框插件 **/
   mw.loader.load('https://cdn.jsdelivr.net/gh/dragon-fish/inpageedit-v2@master/src/ssi_modal/script.min.js');
@@ -20,12 +24,12 @@
     // 模态框
     $('<link>', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/gh/dragon-fish/inpageedit-v2@master/src/ssi_modal/style.min.css' }),
     // 覆写
-    $('<link>', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/gh/dragon-fish/inpageedit-v2/src/override.min.css' })
+    $('<link>', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/gh/dragon-fish/inpageedit-v2@master/src/override.min.css' })
   );
 
   /*** BOT FLAG ***/
   /** 导入 i18n 组件 **/
-  mw.loader.load('https://cdn.jsdelivr.net/gh/dragon-fish/i18n-js/script.min.js');
+  mw.loader.load('https://cdn.jsdelivr.net/gh/dragon-fish/i18n-js@master/script.min.js');
   mw.hook('dfgh.i18n').add(function (i18no) {
     i18no.loadMessages('InPageEdit-v2').then(init);
   });
@@ -428,27 +432,32 @@
             function queryDone(data) {
               var data = data;
               if (data.query.pages[pageId]['protection'].length > 0) {
-                var protection = data.query.pages[pageId].protection[0].level;
-                if (
-                  (protection === 'autoconfirmed' && !InPageEdit.hasRight('autoconfirmed')) ||
-                  (protection === 'sysop' && !InPageEdit.hasRight('editprotected')) ||
-                  (mw.config.get('wgNamespaceNumber') === 8 && !InPageEdit.hasRight('editinterface'))
-                ) {
-                  ssi_modal.notify('dialog', {
-                    className: 'in-page-edit',
-                    position: 'center bottom',
-                    title: msg('notify-no-right'),
-                    content: msg('editor-no-right'),
-                    okBtn: {
-                      label: msg('ok'),
-                      className: 'btn btn-primary',
-                      method: function (e, modal) {
-                        modal.close();
+                var protection = data.query.pages[pageId]['protection'];
+                for (var i = 0; i < protection.length; i++) {
+                  if (
+                    protection[i].type === 'edit' &&
+                    (
+                      (protection[i].level === 'autoconfirmed' && !InPageEdit.hasRight('autoconfirmed')) ||
+                      (protection[i].level === 'sysop' && !InPageEdit.hasRight('editprotected')) ||
+                      (mw.config.get('wgNamespaceNumber') === 8 && !InPageEdit.hasRight('editinterface'))
+                    )
+                  ) {
+                    ssi_modal.notify('dialog', {
+                      className: 'in-page-edit',
+                      position: 'center bottom',
+                      title: msg('notify-no-right'),
+                      content: msg('editor-no-right'),
+                      okBtn: {
+                        label: msg('ok'),
+                        className: 'btn btn-primary',
+                        method: function (e, modal) {
+                          modal.close();
+                        }
                       }
-                    }
-                  });
-                  $('.ipe-editor.timestamp-' + timestamp + ' .editArea').attr('readonly', 'readonly');
-                  $('.ipe-editor.timestamp-' + timestamp + ' button.editForm').attr('disabled', 'disabled');
+                    });
+                    $('.ipe-editor.timestamp-' + timestamp + ' .editArea').attr('readonly', 'readonly');
+                    $('.ipe-editor.timestamp-' + timestamp + ' button.editForm').attr('disabled', 'disabled');
+                  }
                 }
               }
               // 获取编辑提示
@@ -1533,62 +1542,15 @@
       }
     };
 
-    /** 获取用户权限信息 **/
-    (function () {
-      mw.user.getRights().then(function (rights) {
-        console.info('[InPageEdit] 成功获取用户权限信息');
-        mw.config.set('wgUserRights', rights);
-      }).fail(function () {
-        console.warn('[InPageEdit] 警告：无法获取用户权限信息');
-        mw.config.set('wgUserRights', '');
-      });
-      if (mw.user.getName() !== null) {
-        new mw.Api().get({
-          action: 'query',
-          list: 'users',
-          usprop: 'blockinfo',
-          ususers: mw.user.getName()
-        }).then(function (data) {
-          if (data.query.users[0].hasOwnProperty('blockid')) {
-            mw.config.set('wgUserIsBlocked', true);
-          } else {
-            mw.config.set('wgUserIsBlocked', false);
-          }
-        });
-      }
-    }());
-
-    InPageEdit.hasRight = function (right) {
-      if (mw.config.get('wgUserIsBlocked') === true) {
-        return false;
-      }
-      if (mw.config.get('wgUserRights').indexOf(right) > -1) {
-        return true;
-      } else {
-        return false;
-      }
-    };
-
     /** 版本信息模块 **/
-    if (InPageEdit.isCanary) {
-      InPageEdit.specialNotice = {
-        id: msg('noticeid-canary'),
-        title: msg('version-notice-canary-title'),
-        content: msg('version-notice-canary')
-      };
-    } else {
-      InPageEdit.specialNotice = {
-        id: msg('noticeid'),
-        title: msg('version-notice-title'),
-        content: msg('version-notice')
-      };
-    }
     InPageEdit.versionInfo = function () {
-      var curVersion = InPageEdit.version;
+      // 显示模态框
       ssi_modal.show({
-        className: 'in-page-edit version-info',
-        title: msg('updatelog-title') + ' - <span id="yourVersion">' + msg('updatelog-loading') + '</span>',
-        content: '<div id="IPEversionInfoPlaceholder" class="ipe-progress" style="margin: calc(30% - 1em) auto;"><div class="ipe-progress-bar"></div></div><section style="display:none" id="IPEversionInfo"></section>',
+        className: 'in-page-edit update-logs-modal',
+        title: msg('updatelog-title') + ' - <span id="yourVersion">' + InPageEdit.version + '</span>',
+        content: $('<section>').append(
+          $('<iframe>', { style: 'margin: 0;padding: 0;width: 100%;height: 80vh;border: 0;', src: 'https://dragon-fish.github.io/InPageEdit-v2/update-logs.html?iframe=1' })
+        ).prop('outerHTML'),
         fitScreen: true,
         fixedHeight: true,
         buttons: [{
@@ -1601,54 +1563,31 @@
           label: 'GitHub',
           className: 'btn btn-secondary',
           method: function () {
-            location.href = 'https://github.com/Dragon-Fish/InPageEdit-v2';
+            window.open('https://github.com/Dragon-Fish/InPageEdit-v2');
           }
         }, {
           label: msg('updatelog-about'),
           className: 'btn btn-secondary',
           method: function () {
-            location.href = 'https://common.wjghj.cn/wiki/InPageEdit-v2';
+            window.open('https://dragon-fish.github.io/InPageEdit-v2/');
           }
         }]
       });
-      $.ajax({
-        url: 'https://common.wjghj.cn/api.php',
-        dataType: 'jsonp',
-        type: 'get',
-        data: {
-          page: 'InPageEdit-v2/version-info',
-          action: 'parse',
-          prop: 'text',
-          format: 'json'
-        },
-        success: function (data) {
-          var info = data.parse.text['*'];
-          $('#IPEversionInfoPlaceholder').addClass('done').delay(800).fadeOut(200);
-          $('#IPEversionInfo').html(info);
-          $('#yourVersion').html(localStorage.InPageEditVersion);
-          $('#IPEversionInfo .mw-headline').each(function () {
-            var $this = $(this),
-              text = $this.text();
-            if (text === curVersion) {
-              $this.html('<em class="curVersion" style="background: lightyellow; font-weight: bold">★ ' + $this.text() + '</em>');
-            }
-          });
-          setTimeout('$("#IPEversionInfo").fadeIn(800)', 1000);
-        }
-      });
     };
 
-    /** 关于插件 **/
+    /** 关于插件模块 **/
     InPageEdit.about = function () {
       ssi_modal.show({
         title: '关于InPageEdit',
         className: 'in-page-edit in-page-edit-about',
-        sizeClass: 'dialog',
-        content: '<iframe style="margin: 0;padding: 0;width: 100%;height: 80vh;border: 0;" src="https://dev.fandom.com/wiki/InPageEdit-v2?useskin=mercury&amp;mobile-app=true"></iframe>'
+        // sizeClass: 'dialog',
+        content: $('<section>').append(
+          $('<iframe>', { style: 'margin: 0;padding: 0;width: 100%;height: 80vh;border: 0;', src: 'https://dragon-fish.github.io/InPageEdit-v2/?iframe=1' })
+        ).prop('outerHTML')
       });
     };
 
-    /** 获取版本提示 **/
+    /** 获取版本更新提示 **/
     $(function () {
       var version = InPageEdit.version;
       // 版本更新
@@ -1699,6 +1638,56 @@
         });
       }
     });
+    // 特别通知
+    if (InPageEdit.isCanary) {
+      InPageEdit.specialNotice = {
+        id: msg('noticeid-canary'),
+        title: msg('version-notice-canary-title'),
+        content: msg('version-notice-canary')
+      };
+    } else {
+      InPageEdit.specialNotice = {
+        id: msg('noticeid'),
+        title: msg('version-notice-title'),
+        content: msg('version-notice')
+      };
+    }
+
+    /** 获取用户权限信息 **/
+    (function () {
+      mw.user.getRights().then(function (rights) {
+        console.info('[InPageEdit] 成功获取用户权限信息');
+        mw.config.set('wgUserRights', rights);
+      }).fail(function () {
+        console.warn('[InPageEdit] 警告：无法获取用户权限信息');
+        mw.config.set('wgUserRights', '');
+      });
+      if (mw.user.getName() !== null) {
+        new mw.Api().get({
+          action: 'query',
+          list: 'users',
+          usprop: 'blockinfo',
+          ususers: mw.user.getName()
+        }).then(function (data) {
+          if (data.query.users[0].hasOwnProperty('blockid')) {
+            mw.config.set('wgUserIsBlocked', true);
+          } else {
+            mw.config.set('wgUserIsBlocked', false);
+          }
+        });
+      }
+    }());
+
+    InPageEdit.hasRight = function (right) {
+      if (mw.config.get('wgUserIsBlocked') === true) {
+        return false;
+      }
+      if (mw.config.get('wgUserRights').indexOf(right) > -1) {
+        return true;
+      } else {
+        return false;
+      }
+    };
 
     /** 页面载入完成，自动加载某些模块 **/
     (function () {

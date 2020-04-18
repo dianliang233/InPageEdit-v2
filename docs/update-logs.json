@@ -17,6 +17,21 @@
           "more": []
         }
       ]
-    }
+    },
+    {
+      "version": "2.13.0.1",
+      "date": "-",
+      "description": [
+        {
+          "main": "Security update",
+          "more": []
+        },
+        {
+          "type": "delete",
+          "main": "Hook <code>dev.i18n</code> modified to <code>dfgh.i18n</code>. Prevent contamination of Fandom devwiki variables.",
+          "more": []
+        }
+      ]
+    },
   ]
 }
